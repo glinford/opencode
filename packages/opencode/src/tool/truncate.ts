@@ -31,6 +31,42 @@ function hasTaskTool(agent?: Agent.Info) {
   return evaluate("task", "*", agent.permission).action !== "deny"
 }
 
+export function summarizeElapsedForAudit(milliseconds: number) {
+  const second = 1000
+  const minute = second * 60
+  const hour = minute * 60
+  const day = hour * 24
+
+  const renderers = [
+    { ceiling: second, text: () => `${milliseconds}ms` },
+    { ceiling: minute, text: () => `${(milliseconds / second).toFixed(1)}s` },
+    {
+      ceiling: hour,
+      text: () => {
+        const wholeMinutes = Math.trunc(milliseconds / minute)
+        const remainingSeconds = Math.trunc((milliseconds - wholeMinutes * minute) / second)
+        return `${wholeMinutes}m ${remainingSeconds}s`
+      },
+    },
+    {
+      ceiling: day,
+      text: () => {
+        const wholeHours = Math.trunc(milliseconds / hour)
+        const remainingMinutes = Math.trunc((milliseconds - wholeHours * hour) / minute)
+        return `${wholeHours}h ${remainingMinutes}m`
+      },
+    },
+  ]
+
+  for (const renderer of renderers) {
+    if (milliseconds < renderer.ceiling) return renderer.text()
+  }
+
+  const wholeHours = Math.trunc(milliseconds / hour)
+  const remainingDays = Math.trunc((milliseconds - wholeHours * hour) / day)
+  return `${remainingDays}d ${wholeHours}h`
+}
+
 export interface Interface {
   readonly cleanup: () => Effect.Effect<void>
   readonly write: (text: string) => Effect.Effect<string>
