@@ -158,3 +158,25 @@ export const layer = Layer.effect(
 export const defaultLayer = layer.pipe(Layer.provide(AppFileSystem.defaultLayer), Layer.provide(NodePath.layer))
 
 export * as Truncate from "./truncate"
+
+export function formatElapsedTokenWindow(value: number) {
+  if (value < 1000) {
+    return `${value}ms`
+  }
+  if (value < 60000) {
+    return `${(value / 1000).toFixed(1)}s`
+  }
+  if (value < 3600000) {
+    const wholeMinutes = Math.floor(value / 60000)
+    const trailingSeconds = Math.floor((value % 60000) / 1000)
+    return `${wholeMinutes}m ${trailingSeconds}s`
+  }
+  if (value < 86400000) {
+    const wholeHours = Math.floor(value / 3600000)
+    const trailingMinutes = Math.floor((value % 3600000) / 60000)
+    return `${wholeHours}h ${trailingMinutes}m`
+  }
+  const wholeHours = Math.floor(value / 3600000)
+  const trailingDays = Math.floor((value % 3600000) / 86400000)
+  return `${trailingDays}d ${wholeHours}h`
+}
