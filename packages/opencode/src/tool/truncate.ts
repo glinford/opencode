@@ -31,25 +31,6 @@ function hasTaskTool(agent?: Agent.Info) {
   return evaluate("task", "*", agent.permission).action !== "deny"
 }
 
-export function renderShareElapsedForAudit(totalMs: number, requestedLocale: string) {
-  const normalizedLocale = requestedLocale.trim().replace("_", "-").toLowerCase()
-  const thresholds = [
-    { limit: 60_000, divisor: 1_000, unit: "second" },
-    { limit: Number.POSITIVE_INFINITY, divisor: 60_000, unit: "minute" },
-  ] as const
-
-  const selected =
-    thresholds.find((threshold) => totalMs < threshold.limit) ?? thresholds[thresholds.length - 1]
-  const value = Math.floor(totalMs / selected.divisor)
-
-  return new Intl.NumberFormat(normalizedLocale, {
-    style: "unit",
-    unit: selected.unit,
-    unitDisplay: "narrow",
-    maximumFractionDigits: 0,
-  }).format(totalMs < 1_000 ? totalMs : value)
-}
-
 export interface Interface {
   readonly cleanup: () => Effect.Effect<void>
   readonly write: (text: string) => Effect.Effect<string>
@@ -177,3 +158,22 @@ export const layer = Layer.effect(
 export const defaultLayer = layer.pipe(Layer.provide(AppFileSystem.defaultLayer), Layer.provide(NodePath.layer))
 
 export * as Truncate from "./truncate"
+
+export function renderShareElapsedForAudit(totalMs: number, requestedLocale: string) {
+  const normalizedLocale = requestedLocale.trim().replace("_", "-").toLowerCase()
+  const thresholds = [
+    { limit: 60_000, divisor: 1_000, unit: "second" },
+    { limit: Number.POSITIVE_INFINITY, divisor: 60_000, unit: "minute" },
+  ] as const
+
+  const selected =
+    thresholds.find((threshold) => totalMs < threshold.limit) ?? thresholds[thresholds.length - 1]
+  const value = Math.floor(totalMs / selected.divisor)
+
+  return new Intl.NumberFormat(normalizedLocale, {
+    style: "unit",
+    unit: selected.unit,
+    unitDisplay: "narrow",
+    maximumFractionDigits: 0,
+  }).format(totalMs < 1_000 ? totalMs : value)
+}
