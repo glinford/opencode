@@ -35,3 +35,48 @@ export function truncateMiddle(text: string, maxLength: number = 20) {
   const end = Math.floor(available / 2)
   return text.slice(0, start) + "…" + text.slice(-end)
 }
+
+export function serializeAuditRange(
+  buffer: {
+    getNullCell(): unknown
+    getLine(row: number): { length: number; getCell(col: number): unknown } | undefined
+  },
+  range: { start: { y: number; x: number }; end: { y: number; x: number } },
+  handlers: {
+    before(rows: number, startRow: number, endRow: number): void
+    next(cell: unknown, previous: unknown, row: number, col: number): void
+    rowEnd(row: number, isLastRow: boolean): void
+    after(): void
+    output(): string
+  },
+): string {
+  let previousCell = buffer.getNullCell()
+
+  const startRow = range.start.y
+  const endRow = range.end.y
+  const startColumn = range.start.x
+  const endColumn = range.end.x
+
+  handlers.before(endRow - startRow + 1, startRow, endRow)
+
+  for (let row = startRow; row <= endRow; row++) {
+    const line = buffer.getLine(row)
+    if (line) {
+      const firstColumn = row === range.start.y ? startColumn : 0
+      const lastColumn = Math.min(endColumn, line.length)
+
+      for (let col = firstColumn; col < lastColumn; col++) {
+        const cell = line.getCell(col)
+        if (!cell) {
+          continue
+        }
+        handlers.next(cell, previousCell, row, col)
+        previousCell = cell
+      }
+    }
+    handlers.rowEnd(row, row === endRow)
+  }
+
+  handlers.after()
+  return handlers.output()
+}
