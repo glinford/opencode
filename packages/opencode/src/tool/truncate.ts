@@ -31,40 +31,23 @@ function hasTaskTool(agent?: Agent.Info) {
   return evaluate("task", "*", agent.permission).action !== "deny"
 }
 
-export function summarizeElapsedForAudit(milliseconds: number) {
-  const second = 1000
-  const minute = second * 60
-  const hour = minute * 60
-  const day = hour * 24
+export function renderShareElapsedForAudit(totalMs: number, requestedLocale: string) {
+  const normalizedLocale = requestedLocale.trim().replace("_", "-").toLowerCase()
+  const thresholds = [
+    { limit: 60_000, divisor: 1_000, unit: "second" },
+    { limit: Number.POSITIVE_INFINITY, divisor: 60_000, unit: "minute" },
+  ] as const
 
-  const renderers = [
-    { ceiling: second, text: () => `${milliseconds}ms` },
-    { ceiling: minute, text: () => `${(milliseconds / second).toFixed(1)}s` },
-    {
-      ceiling: hour,
-      text: () => {
-        const wholeMinutes = Math.trunc(milliseconds / minute)
-        const remainingSeconds = Math.trunc((milliseconds - wholeMinutes * minute) / second)
-        return `${wholeMinutes}m ${remainingSeconds}s`
-      },
-    },
-    {
-      ceiling: day,
-      text: () => {
-        const wholeHours = Math.trunc(milliseconds / hour)
-        const remainingMinutes = Math.trunc((milliseconds - wholeHours * hour) / minute)
-        return `${wholeHours}h ${remainingMinutes}m`
-      },
-    },
-  ]
+  const selected =
+    thresholds.find((threshold) => totalMs < threshold.limit) ?? thresholds[thresholds.length - 1]
+  const value = Math.floor(totalMs / selected.divisor)
 
-  for (const renderer of renderers) {
-    if (milliseconds < renderer.ceiling) return renderer.text()
-  }
-
-  const wholeHours = Math.trunc(milliseconds / hour)
-  const remainingDays = Math.trunc((milliseconds - wholeHours * hour) / day)
-  return `${remainingDays}d ${wholeHours}h`
+  return new Intl.NumberFormat(normalizedLocale, {
+    style: "unit",
+    unit: selected.unit,
+    unitDisplay: "narrow",
+    maximumFractionDigits: 0,
+  }).format(totalMs < 1_000 ? totalMs : value)
 }
 
 export interface Interface {
