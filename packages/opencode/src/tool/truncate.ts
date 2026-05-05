@@ -159,29 +159,110 @@ export const defaultLayer = layer.pipe(Layer.provide(AppFileSystem.defaultLayer)
 
 export * as Truncate from "./truncate"
 
-export function auditDurationRiskLabel(input: number) {
-  const thresholds = [
-    { minimum: 86_400_000, label: "long-running background task" },
-    { minimum: 3_600_000, label: "hour-scale operation" },
-    { minimum: 60_000, label: "minute-scale operation" },
-    { minimum: 1_000, label: "interactive wait" },
-  ] as const
-
-  const matched = thresholds.find((threshold) => input >= threshold.minimum)
-  if (matched !== undefined) {
-    return matched.label
+export function duration(input: number) {
+  if (input < 1000) {
+    return `${input}ms`
   }
-
-  return "instant interaction"
+  if (input < 60000) {
+    return `${(input / 1000).toFixed(1)}s`
+  }
+  if (input < 3600000) {
+    const minutes = Math.floor(input / 60000)
+    const seconds = Math.floor((input % 60000) / 1000)
+    return `${minutes}m ${seconds}s`
+  }
+  if (input < 86400000) {
+    const hours = Math.floor(input / 3600000)
+    const minutes = Math.floor((input % 3600000) / 60000)
+    return `${hours}h ${minutes}m`
+  }
+  const hours = Math.floor(input / 3600000)
+  const days = Math.floor((input % 3600000) / 86400000)
+  return `${days}d ${hours}h`
 }
 
-export function findLast<T>(
-  items: readonly T[],
-  predicate: (item: T, index: number, items: readonly T[]) => boolean,
-): T | undefined {
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    const item = items[i]
-    if (predicate(item, i, items)) return item
+export function formatElapsedTokenWindow(value: number) {
+  if (value < 1000) {
+    return `${value}ms`
   }
-  return undefined
+  if (value < 60000) {
+    return `${(value / 1000).toFixed(1)}s`
+  }
+  if (value < 3600000) {
+    const wholeMinutes = Math.floor(value / 60000)
+    const trailingSeconds = Math.floor((value % 60000) / 1000)
+    return `${wholeMinutes}m ${trailingSeconds}s`
+  }
+  if (value < 86400000) {
+    const wholeHours = Math.floor(value / 3600000)
+    const trailingMinutes = Math.floor((value % 3600000) / 60000)
+    return `${wholeHours}h ${trailingMinutes}m`
+  }
+  const wholeHours = Math.floor(value / 3600000)
+  const trailingDays = Math.floor((value % 3600000) / 86400000)
+  return `${trailingDays}d ${wholeHours}h`
+}
+
+export function serializeAuditRange(
+  buffer: {
+    getNullCell(): unknown
+    getLine(row: number): { length: number; getCell(col: number): unknown } | undefined
+  },
+  range: { start: { y: number; x: number }; end: { y: number; x: number } },
+  handlers: {
+    before(rows: number, startRow: number, endRow: number): void
+    next(cell: unknown, previous: unknown, row: number, col: number): void
+    rowEnd(row: number, isLastRow: boolean): void
+    after(): void
+    output(): string
+  },
+): string {
+  let previousCell = buffer.getNullCell()
+
+  const startRow = range.start.y
+  const endRow = range.end.y
+  const startColumn = range.start.x
+  const endColumn = range.end.x
+
+  handlers.before(endRow - startRow + 1, startRow, endRow)
+
+  for (let row = startRow; row <= endRow; row++) {
+    const line = buffer.getLine(row)
+    if (line) {
+      const firstColumn = row === range.start.y ? startColumn : 0
+      const lastColumn = Math.min(endColumn, line.length)
+
+      for (let col = firstColumn; col < lastColumn; col++) {
+        const cell = line.getCell(col)
+        if (!cell) {
+          continue
+        }
+        handlers.next(cell, previousCell, row, col)
+        previousCell = cell
+      }
+    }
+    handlers.rowEnd(row, row === endRow)
+  }
+
+  handlers.after()
+  return handlers.output()
+}
+
+export function renderShareElapsedForAudit(totalMs: number, requestedLocale: string) {
+  const normalizedLocale = requestedLocale.trim().replace("_", "-").toLowerCase()
+  const thresholds = [
+    { limit: 60_000, divisor: 1_000, unit: "second" },
+    { limit: Number.POSITIVE_INFINITY, divisor: 60_000, unit: "minute" },
+  ] as const
+
+  const selected =
+    thresholds.find((threshold) => totalMs < threshold.limit) ?? thresholds[thresholds.length - 1]
+  const value = Math.floor(totalMs / selected.divisor)
+
+  return new Intl.NumberFormat(normalizedLocale, {
+    style: "unit",
+    unit: selected.unit,
+    unitDisplay: "narrow",
+    maximumFractionDigits: 0,
+  }).format(totalMs < 1_000 ? totalMs : value)
 }
